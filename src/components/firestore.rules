@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUser() {
+      return isAuthenticated();
+    }
+
+    function isValidTime(time) {
+      return time is timestamp && time <= request.time;
+    }
+
+    // User profiles collection
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      
+      // Allow create during signup without requiring email verification
+      allow create: if isAuthenticated() && 
+                   request.auth.uid == userId && 
+                   request.resource.data.keys().hasAll(['email', 'fullName', 'createdAt', 'updatedAt']) &&
+                   isValidTime(request.resource.data.createdAt) &&
+                   isValidTime(request.resource.data.updatedAt);
+      
+      allow update: if isOwner(userId) && 
+                   request.resource.data.diff(resource.data).affectedKeys()
+                   .hasAny(['fullName', 'companyName', 'industry', 'interests', 'additionalInfo', 'updatedAt']) &&
+                   isValidTime(request.resource.data.updatedAt) &&
+                   request.resource.data.email == resource.data.email &&
+                   request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    // Forms collection
+    match /forms/{formId} {
+      allow read: if resource.data.published == true || 
+                 (isValidUser() && resource.data.userId == request.auth.uid);
+                 
+      allow create: if isValidUser() && 
+                   request.resource.data.userId == request.auth.uid &&
+                   request.resource.data.keys().hasAll(['title', 'elements', 'userId', 'createdAt', 'updatedAt']) &&
+                   isValidTime(request.resource.data.createdAt) &&
+                   isValidTime(request.resource.data.updatedAt);
+                   
+      allow update: if isValidUser() && 
+                   resource.data.userId == request.auth.uid &&
+                   request.resource.data.userId == request.auth.uid &&
+                   isValidTime(request.resource.data.updatedAt) &&
+                   request.resource.data.createdAt == resource.data.createdAt;
+      
+      allow delete: if isValidUser() && resource.data.userId == request.auth.uid;
+      
+      // Submissions subcollection
+      match /submissions/{submissionId} {
+        allow read: if isValidUser() && 
+                   get(/databases/$(database)/documents/forms/$(formId)).data.userId == request.auth.uid;
+        
+        allow create: if get(/databases/$(database)/documents/forms/$(formId)).data.published == true &&
+                     request.resource.data.keys().hasAll(['responses', 'submittedAt']) &&
+                     isValidTime(request.resource.data.submittedAt);
+        
+        allow update: if isValidUser() && 
+                     get(/databases/$(database)/documents/forms/$(formId)).data.userId == request.auth.uid &&
+                     request.resource.data.keys().hasAll(['responses', 'submittedAt', 'updatedAt']) &&
+                     isValidTime(request.resource.data.updatedAt) &&
+                     request.resource.data.submittedAt == resource.data.submittedAt;
+        
+        allow delete: if isValidUser() && 
+                     get(/databases/$(database)/documents/forms/$(formId)).data.userId == request.auth.uid;
+      }
+    }
+
+    // Prevent access to other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
