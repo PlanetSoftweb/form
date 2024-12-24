@@ -6,6 +6,7 @@ interface FormActionsProps {
   onCopyLink: () => void;
   onCopyEmbed: () => void;
   onViewSubmissions: () => void;
+  onUnpublish: () => void;
 }
 
 export const FormActions: React.FC<FormActionsProps> = ({
@@ -13,6 +14,7 @@ export const FormActions: React.FC<FormActionsProps> = ({
   onCopyLink,
   onCopyEmbed,
   onViewSubmissions,
+  onUnpublish
 }) => {
   return (
     <div className="space-y-2">
@@ -43,6 +45,12 @@ export const FormActions: React.FC<FormActionsProps> = ({
       >
         <FileText className="h-4 w-4 mr-2" />
         View Submissions
+      </button>
+      <button
+        onClick={onUnpublish}
+        className="w-full flex items-center justify-center px-4 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+      >
+        Unpublish Form
       </button>
     </div>
   );

@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useFormStore } from '../store/formStore';
 import { CreateFormModal } from './modals/CreateFormModal';
 import { AnalyticsDashboard } from './analytics/AnalyticsDashboard';
 import { FormCard } from './dashboard/FormCard';
-import { PlusCircle, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { DashboardHeader } from './dashboard/DashboardHeader';
+import { EmptyState } from './dashboard/EmptyState';
+import { PlusCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export const Dashboard = () => {
+export const Dashboard: React.FC = () => {
   const { user } = useAuthStore();
   const {
     forms,
@@ -17,13 +19,18 @@ export const Dashboard = () => {
     deleteForm,
     loading: formsLoading,
   } = useFormStore();
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = React.useState(false);
+  const [showAnalytics, setShowAnalytics] = React.useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchForms(user.uid);
     }
+    
+    // Cleanup subscriptions on unmount
+    return () => {
+      useFormStore.getState().cleanup();
+    };
   }, [user, fetchForms]);
 
   const handleCopyLink = (formId: string) => {
@@ -75,37 +82,13 @@ export const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-blue-50 pb-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Forms</h1>
-            <p className="text-gray-600 mt-1">
-              {forms.length} {forms.length === 1 ? 'form' : 'forms'} created
-            </p>
-          </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-          >
-            <PlusCircle className="h-5 w-5 mr-2" />
-            Create Form
-          </button>
-        </div>
+        <DashboardHeader
+          formCount={forms.length}
+          onCreateClick={() => setShowCreateModal(true)}
+        />
 
         {forms.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl shadow-sm">
-            <div className="flex justify-center mb-4">
-              <FileSpreadsheet className="h-12 w-12 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No forms yet</h3>
-            <p className="text-gray-500 mb-6">Get started by creating your first form</p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-            >
-              <PlusCircle className="h-5 w-5 mr-2" />
-              Create Form
-            </button>
-          </div>
+          <EmptyState onCreateClick={() => setShowCreateModal(true)} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {forms.map((form) => (
@@ -133,7 +116,6 @@ export const Dashboard = () => {
       {showAnalytics && (
         <AnalyticsDashboard
           formId={showAnalytics}
-          submissions={forms.find(f => f.id === showAnalytics)?.submissions || []}
           elements={forms.find(f => f.id === showAnalytics)?.elements || []}
           onClose={() => setShowAnalytics(null)}
         />

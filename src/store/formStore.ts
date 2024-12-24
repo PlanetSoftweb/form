@@ -1,102 +1,20 @@
 import { create } from 'zustand';
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  query, 
-  where, 
-  updateDoc, 
-  doc, 
-  getDoc,
-  deleteDoc,
-  orderBy,
-  Timestamp,
-  serverTimestamp
-} from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { 
+  doc, 
+  getDoc, 
+  collection, 
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  serverTimestamp 
+} from 'firebase/firestore';
 import toast from 'react-hot-toast';
-
-export interface FormElement {
-  id: string;
-  type: 'text' | 'number' | 'email' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'time' | 'phone' | 'file' | 'rating' | 'heading' | 'paragraph' | 'image' | 'divider';
-  label: string;
-  required: boolean;
-  options?: string[];
-  placeholder?: string;
-  description?: string;
-  validation?: {
-    minLength?: number;
-    maxLength?: number;
-    pattern?: string;
-    min?: number;
-    max?: number;
-    acceptedFiles?: string[];
-  };
-  style?: {
-    fontSize?: string;
-    textAlign?: 'left' | 'center' | 'right';
-    width?: string;
-    height?: string;
-    imageUrl?: string;
-    columns?: number;
-  };
-}
-
-export interface FormSubmission {
-  id: string;
-  formId: string;
-  responses: Record<string, any>;
-  submittedAt: Date;
-  submittedBy?: string;
-}
-
-export interface Form {
-  id: string;
-  title: string;
-  description?: string;
-  elements: FormElement[];
-  style: {
-    backgroundColor: string;
-    textColor: string;
-    buttonColor: string;
-    borderRadius: string;
-    fontFamily: string;
-  };
-  userId: string;
-  published: boolean;
-  submissions: FormSubmission[];
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  publishedAt?: Timestamp;
-  shareUrl?: string;
-  embedCode?: string;
-  settings?: {
-    collectEmail: boolean;
-    submitMessage: string;
-    redirectUrl?: string;
-    notifyOnSubmission: boolean;
-  };
-}
-
-interface FormState {
-  forms: Form[];
-  currentForm: Form | null;
-  submissions: FormSubmission[];
-  loading: boolean;
-  error: string | null;
-  fetchForms: (userId: string) => Promise<void>;
-  fetchForm: (formId: string) => Promise<Form | null>;
-  fetchSubmissions: (formId: string) => Promise<void>;
-  saveForm: (form: Partial<Form>) => Promise<string>;
-  updateForm: (formId: string, updates: Partial<Form>) => Promise<void>;
-  deleteForm: (formId: string) => Promise<void>;
-  publishForm: (formId: string) => Promise<void>;
-  unpublishForm: (formId: string) => Promise<void>;
-  submitFormResponse: (formId: string, responses: Record<string, any>, email?: string) => Promise<void>;
-  updateSubmission: (formId: string, submissionId: string, responses: Record<string, any>) => Promise<void>;
-  deleteSubmission: (formId: string, submissionId: string) => Promise<void>;
-  setCurrentForm: (form: Form | null) => void;
-}
+import type { FormState, Form, FormSubmission } from './types/form';
 
 export const useFormStore = create<FormState>((set, get) => ({
   forms: [],
@@ -104,36 +22,14 @@ export const useFormStore = create<FormState>((set, get) => ({
   submissions: [],
   loading: false,
   error: null,
-
-  fetchForms: async (userId) => {
-    try {
-      set({ loading: true, error: null });
-      const q = query(
-        collection(db, 'forms'),
-        where('userId', '==', userId),
-        orderBy('updatedAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const forms = snapshot.docs.map(doc => ({ 
-        ...doc.data(), 
-        id: doc.id,
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate(),
-        publishedAt: doc.data().publishedAt?.toDate(),
-      } as Form));
-      set({ forms, loading: false });
-    } catch (error: any) {
-      console.error('Error fetching forms:', error);
-      set({ error: error.message, loading: false });
-      toast.error('Failed to load forms');
-    }
-  },
+  subscriptions: new Map(),
 
   fetchForm: async (formId) => {
     try {
       set({ loading: true, error: null });
       const docRef = doc(db, 'forms', formId);
       const docSnap = await getDoc(docRef);
+      
       if (docSnap.exists()) {
         const formData = docSnap.data();
         const form = { 
@@ -143,7 +39,9 @@ export const useFormStore = create<FormState>((set, get) => ({
           updatedAt: formData.updatedAt?.toDate(),
           publishedAt: formData.publishedAt?.toDate(),
         } as Form;
+        
         set({ currentForm: form, loading: false });
+        get().subscribeToFormSubmissions(formId);
         return form;
       }
       set({ loading: false });
@@ -156,51 +54,52 @@ export const useFormStore = create<FormState>((set, get) => ({
     }
   },
 
-  fetchSubmissions: async (formId) => {
+  fetchForms: async (userId) => {
     try {
       set({ loading: true, error: null });
-      const q = query(
-        collection(db, `forms/${formId}/submissions`),
-        orderBy('submittedAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const submissions = snapshot.docs.map(doc => ({
+      const formsRef = collection(db, 'forms');
+      const q = query(formsRef, where('userId', '==', userId));
+      const querySnapshot = await getDocs(q);
+      
+      const forms = querySnapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id,
-        submittedAt: doc.data().submittedAt?.toDate(),
-      })) as FormSubmission[];
-      set({ submissions, loading: false });
+        createdAt: doc.data().createdAt?.toDate(),
+        updatedAt: doc.data().updatedAt?.toDate(),
+        publishedAt: doc.data().publishedAt?.toDate(),
+      })) as Form[];
+      
+      set({ forms, loading: false });
     } catch (error: any) {
-      console.error('Error fetching submissions:', error);
+      console.error('Error fetching forms:', error);
       set({ error: error.message, loading: false });
-      toast.error('Failed to load submissions');
+      toast.error('Failed to load forms');
     }
   },
 
   saveForm: async (formData) => {
     try {
       set({ loading: true, error: null });
-      const form = {
+      const docRef = await addDoc(collection(db, 'forms'), {
         ...formData,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        published: false,
-        submissions: [],
-      };
+        updatedAt: serverTimestamp()
+      });
       
-      const docRef = await addDoc(collection(db, 'forms'), form);
-      const newForm = { ...form, id: docRef.id } as Form;
-      set(state => ({ 
-        forms: [newForm, ...state.forms],
-        loading: false 
-      }));
+      const newForm = {
+        ...formData,
+        id: docRef.id,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as Form;
       
-      toast.success('Form created successfully');
+      set(state => ({ forms: [...state.forms, newForm], loading: false }));
+      toast.success('Form saved successfully');
       return docRef.id;
     } catch (error: any) {
       console.error('Error saving form:', error);
       set({ error: error.message, loading: false });
-      toast.error('Failed to create form');
+      toast.error('Failed to save form');
       throw error;
     }
   },
@@ -208,15 +107,17 @@ export const useFormStore = create<FormState>((set, get) => ({
   updateForm: async (formId, updates) => {
     try {
       set({ loading: true, error: null });
-      const formRef = doc(db, 'forms', formId);
-      await updateDoc(formRef, {
+      const docRef = doc(db, 'forms', formId);
+      await updateDoc(docRef, {
         ...updates,
-        updatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
-
+      
       set(state => ({
         forms: state.forms.map(form =>
-          form.id === formId ? { ...form, ...updates, updatedAt: new Date() } : form
+          form.id === formId
+            ? { ...form, ...updates, updatedAt: new Date() }
+            : form
         ),
         loading: false
       }));
@@ -235,9 +136,9 @@ export const useFormStore = create<FormState>((set, get) => ({
       set({ loading: true, error: null });
       await deleteDoc(doc(db, 'forms', formId));
       
-      set(state => ({ 
+      set(state => ({
         forms: state.forms.filter(form => form.id !== formId),
-        loading: false 
+        loading: false
       }));
       
       toast.success('Form deleted successfully');
@@ -252,21 +153,16 @@ export const useFormStore = create<FormState>((set, get) => ({
   publishForm: async (formId) => {
     try {
       set({ loading: true, error: null });
-      const formRef = doc(db, 'forms', formId);
-      await updateDoc(formRef, {
+      await updateDoc(doc(db, 'forms', formId), {
         published: true,
-        publishedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        publishedAt: serverTimestamp()
       });
       
       set(state => ({
         forms: state.forms.map(form =>
-          form.id === formId ? { 
-            ...form, 
-            published: true, 
-            publishedAt: new Date(),
-            updatedAt: new Date()
-          } : form
+          form.id === formId
+            ? { ...form, published: true, publishedAt: new Date() }
+            : form
         ),
         loading: false
       }));
@@ -283,19 +179,16 @@ export const useFormStore = create<FormState>((set, get) => ({
   unpublishForm: async (formId) => {
     try {
       set({ loading: true, error: null });
-      const formRef = doc(db, 'forms', formId);
-      await updateDoc(formRef, {
+      await updateDoc(doc(db, 'forms', formId), {
         published: false,
-        updatedAt: serverTimestamp(),
+        publishedAt: null
       });
       
       set(state => ({
         forms: state.forms.map(form =>
-          form.id === formId ? { 
-            ...form, 
-            published: false,
-            updatedAt: new Date()
-          } : form
+          form.id === formId
+            ? { ...form, published: false, publishedAt: undefined }
+            : form
         ),
         loading: false
       }));
@@ -309,24 +202,30 @@ export const useFormStore = create<FormState>((set, get) => ({
     }
   },
 
-  submitFormResponse: async (formId, responses, email?) => {
+  submitFormResponse: async (formId, responses) => {
     try {
       set({ loading: true, error: null });
-      const submission = {
-        formId,
+      const submissionRef = await addDoc(collection(db, `forms/${formId}/submissions`), {
         responses,
-        submittedAt: serverTimestamp(),
-        submittedBy: email,
+        submittedAt: serverTimestamp()
+      });
+      
+      const newSubmission = {
+        id: submissionRef.id,
+        responses,
+        submittedAt: new Date()
       };
       
-      await addDoc(collection(db, `forms/${formId}/submissions`), submission);
-      set({ loading: false });
+      set(state => ({
+        submissions: [...state.submissions, newSubmission],
+        loading: false
+      }));
       
-      toast.success('Form submitted successfully');
+      toast.success('Response submitted successfully');
     } catch (error: any) {
-      console.error('Error submitting form:', error);
+      console.error('Error submitting response:', error);
       set({ error: error.message, loading: false });
-      toast.error('Failed to submit form');
+      toast.error('Failed to submit response');
       throw error;
     }
   },
@@ -334,17 +233,25 @@ export const useFormStore = create<FormState>((set, get) => ({
   updateSubmission: async (formId, submissionId, responses) => {
     try {
       set({ loading: true, error: null });
-      const submissionRef = doc(db, `forms/${formId}/submissions/${submissionId}`);
-      await updateDoc(submissionRef, {
+      await updateDoc(doc(db, `forms/${formId}/submissions`, submissionId), {
         responses,
         updatedAt: serverTimestamp()
       });
       
-      await get().fetchSubmissions(formId);
-      set({ loading: false });
+      set(state => ({
+        submissions: state.submissions.map(sub =>
+          sub.id === submissionId
+            ? { ...sub, responses }
+            : sub
+        ),
+        loading: false
+      }));
+      
+      toast.success('Response updated successfully');
     } catch (error: any) {
       console.error('Error updating submission:', error);
       set({ error: error.message, loading: false });
+      toast.error('Failed to update response');
       throw error;
     }
   },
@@ -352,16 +259,59 @@ export const useFormStore = create<FormState>((set, get) => ({
   deleteSubmission: async (formId, submissionId) => {
     try {
       set({ loading: true, error: null });
-      await deleteDoc(doc(db, `forms/${formId}/submissions/${submissionId}`));
+      await deleteDoc(doc(db, `forms/${formId}/submissions`, submissionId));
       
-      await get().fetchSubmissions(formId);
-      set({ loading: false });
+      set(state => ({
+        submissions: state.submissions.filter(sub => sub.id !== submissionId),
+        loading: false
+      }));
+      
+      toast.success('Response deleted successfully');
     } catch (error: any) {
       console.error('Error deleting submission:', error);
       set({ error: error.message, loading: false });
+      toast.error('Failed to delete response');
       throw error;
     }
   },
 
-  setCurrentForm: (form) => set({ currentForm: form }),
+  subscribeToFormSubmissions: (formId) => {
+    const existingSub = get().subscriptions.get(formId);
+    if (existingSub) {
+      existingSub();
+      get().subscriptions.delete(formId);
+    }
+
+    const submissionsRef = collection(db, `forms/${formId}/submissions`);
+    const unsubscribe = onSnapshot(submissionsRef, (snapshot) => {
+      const submissions = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id,
+        submittedAt: doc.data().submittedAt?.toDate(),
+      })) as FormSubmission[];
+
+      set(state => ({
+        submissions,
+        forms: state.forms.map(form => 
+          form.id === formId 
+            ? { ...form, submissions }
+            : form
+        )
+      }));
+    }, (error) => {
+      console.error('Error in submissions subscription:', error);
+      toast.error('Failed to sync submissions');
+    });
+
+    get().subscriptions.set(formId, unsubscribe);
+    return unsubscribe;
+  },
+
+  cleanup: () => {
+    const { subscriptions } = get();
+    subscriptions.forEach(unsubscribe => unsubscribe());
+    subscriptions.clear();
+  }
 }));
+
+export type { Form, FormElement, FormSubmission } from './types/form';

@@ -1,5 +1,6 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface StatsCardProps {
   title: string;
@@ -7,7 +8,6 @@ interface StatsCardProps {
   icon: LucideIcon;
   iconBgColor: string;
   iconColor: string;
-  subtitle?: string;
   trend?: {
     value: number;
     label: string;
@@ -21,11 +21,14 @@ export const StatsCard: React.FC<StatsCardProps> = ({
   icon: Icon,
   iconBgColor,
   iconColor,
-  subtitle,
   trend
 }) => {
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-xl shadow-sm p-6"
+    >
       <div className="flex justify-between items-start">
         <div>
           <p className="text-sm text-gray-500">{title}</p>
@@ -35,22 +38,15 @@ export const StatsCard: React.FC<StatsCardProps> = ({
           <Icon className={`h-6 w-6 ${iconColor}`} />
         </div>
       </div>
-      {(trend || subtitle) && (
-        <div className="mt-4 text-sm">
-          {trend ? (
-            <div className="flex items-center">
-              <span className={`flex items-center ${
-                trend.isPositive ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {trend.value}
-              </span>
-              <span className="text-gray-500 ml-2">{trend.label}</span>
-            </div>
-          ) : (
-            <span className="text-gray-500">{subtitle}</span>
-          )}
+      
+      {trend && (
+        <div className="mt-4 flex items-center text-sm">
+          <span className={trend.isPositive ? 'text-green-600' : 'text-red-600'}>
+            {trend.value > 0 ? '+' : ''}{Math.round(trend.value)}%
+          </span>
+          <span className="text-gray-500 ml-2">{trend.label}</span>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
