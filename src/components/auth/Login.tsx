@@ -5,6 +5,7 @@ import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { AuthLayout } from './styles/AuthLayout';
 import { AuthInput } from './styles/AuthInput';
+import { PasswordInput } from './PasswordInput';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -48,10 +49,9 @@ export const Login = () => {
           placeholder="Enter your email"
         />
 
-        <AuthInput
+        <PasswordInput
           icon={Lock}
           label="Password"
-          type="password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
