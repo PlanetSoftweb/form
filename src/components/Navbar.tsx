@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { LogOut, FormInput, User, Settings } from 'lucide-react';
+import { LogOut, FormInput, User, Layout } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 
 export const Navbar = () => {
@@ -11,11 +11,12 @@ export const Navbar = () => {
   // Don't show navbar on auth pages and public form pages
   const isAuthPage = ['/login', '/register'].includes(location.pathname);
   const isPublicFormPage = location.pathname.startsWith('/form/') || location.pathname.startsWith('/embed/');
+  const isLandingPage = location.pathname === '/';
   
   if (isAuthPage || isPublicFormPage) return null;
 
   return (
-    <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <nav className={`${isLandingPage ? 'bg-transparent' : 'bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
@@ -29,18 +30,18 @@ export const Navbar = () => {
             {user ? (
               <>
                 <Link
+                  to="/dashboard"
+                  className="inline-flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                >
+                  <Layout className="h-4 w-4 mr-2" />
+                  Dashboard
+                </Link>
+                <Link
                   to="/profile"
                   className="inline-flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
                 >
                   <User className="h-4 w-4 mr-2" />
                   Profile
-                </Link>
-                <Link
-                  to="/builder"
-                  className="inline-flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Builder
                 </Link>
                 <button
                   onClick={signOut}
@@ -51,12 +52,20 @@ export const Navbar = () => {
                 </button>
               </>
             ) : (
-              <Link
-                to="/login"
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-              >
-                Sign in
-              </Link>
+              <>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/register"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  Get Started
+                </Link>
+              </>
             )}
           </div>
         </div>
